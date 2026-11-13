@@ -1,0 +1,16 @@
+# Render Blueprint: one Node web service that serves the game and hosts the multiplayer rooms.
+# Render provides PORT and HTTPS; the game connects back over wss:// on the same address.
+services:
+  - type: web
+    name: coral-front
+    runtime: node
+    plan: free            # free instances sleep after 15 min idle; use "starter" to keep rooms always on
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production

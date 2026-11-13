@@ -1,0 +1,23 @@
+{
+  "name": "coral-front",
+  "version": "1.0.0",
+  "description": "Coral Front: browser air-combat flight game with online multiplayer (Colyseus)",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node test/sim.test.js && node test/multiplayer.test.js"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.18.28",
+    "@colyseus/schema": "^5.0.48",
+    "@colyseus/sdk": "^0.18.10",
+    "@colyseus/ws-transport": "^0.18.5",
+    "express": "^5.1.0",
+    "three": "0.128.0"
+  }
+}

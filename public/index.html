@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coral Front — Air War</title>
+<style>
+:root{--bg:rgba(8,16,22,.86);--line:rgba(255,255,255,.12);--txt:#eef3f5;--dim:#9fb3bd;--blue:#4db4ff;--red:#ff5a4d;--ok:#7ddc6f;--warn:#ffd23f;--f:"Avenir Next Condensed","Roboto Condensed","Arial Narrow",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b1217;color:var(--txt);font:15px/1.35 var(--f)}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#hud{pointer-events:none}
+.hide{display:none!important}
+.panel{position:fixed;background:var(--bg);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px);box-shadow:0 10px 40px rgba(0,0,0,.45)}
+h1{font-size:64px;letter-spacing:.06em;margin:0;font-weight:800;line-height:1}
+h2{font-size:12px;letter-spacing:.16em;color:var(--dim);margin:18px 0 6px;font-weight:800;text-transform:uppercase}
+button{font:800 14px var(--f);letter-spacing:.08em;color:var(--txt);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:7px;padding:10px 14px;cursor:pointer;text-transform:uppercase}
+button:hover:not(:disabled){background:rgba(255,255,255,.16)}
+button:disabled{opacity:.4;cursor:default}
+button.big{font-size:18px;padding:14px 18px;width:100%}
+button.go{background:#2d8f4e;border-color:#3fb565}button.go:hover:not(:disabled){background:#36a85c}
+button.mp{background:#1f5f8f;border-color:#2f7fbf}button.mp:hover:not(:disabled){background:#2870a8}
+input[type=text],select{font:600 15px var(--f);color:var(--txt);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:7px;padding:9px 10px;width:100%}
+select option,select optgroup{background:#152029}
+input[type=range]{width:100%}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.team.on{outline:2px solid currentColor}
+#tBlue{color:var(--blue)}#tRed{color:var(--red)}
+.dim{color:var(--dim);font-size:13px}.ok{color:var(--ok)}
+.err{color:var(--red);min-height:20px;font-weight:700;margin-top:6px}
+#title{left:50%;top:50%;transform:translate(-50%,-50%);padding:36px 44px;text-align:center;width:min(520px,92vw)}
+#title p{color:var(--dim);margin:10px 0 24px}
+#menu{left:16px;top:16px;bottom:16px;width:min(410px,94vw);padding:18px 20px;overflow-y:auto}
+#menu .sect{border-top:1px solid var(--line);margin-top:14px;padding-top:4px}
+#sDesc{font-size:13px;color:var(--dim);margin-top:6px}
+#roomList{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:150px;overflow:auto}
+.room{text-align:left;font-size:12px;letter-spacing:.03em;text-transform:none}
+#sCode{text-transform:uppercase;letter-spacing:.3em;font-weight:800;text-align:center;font-size:20px}
+#help{right:16px;top:16px;width:min(360px,92vw);padding:16px 18px;font-size:13px;max-height:calc(100vh - 32px);overflow:auto}
+#help td{padding:2px 8px 2px 0;vertical-align:top}#help td:first-child{color:var(--warn);font-weight:800;white-space:nowrap}
+#arm,#spawnP,#res,#pause{left:50%;top:50%;transform:translate(-50%,-50%);padding:22px 26px;width:min(420px,92vw)}
+#arm label{display:flex;justify-content:space-between;font-weight:700;margin-top:10px}
+#res{text-align:center}#ttl{font-size:56px;font-weight:800;letter-spacing:.06em}
+#codeBox{left:10px;top:124px;padding:6px 10px;display:flex;gap:10px;align-items:center;font-weight:800;letter-spacing:.2em}
+#codeBox button{padding:5px 9px;font-size:11px}
+#chatBox{left:16px;bottom:120px;width:min(420px,80vw);padding:8px}
+body.menu #hud{display:none}
+.cred{font-size:11px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body class="menu">
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+
+<div id="title" class="panel">
+  <h1>CORAL FRONT</h1>
+  <p>Air war over islands, valleys and cities — real-world air forces, live ATC, weather, and multiplayer.</p>
+  <button id="bPlay" class="big go">PLAY</button>
+  <div class="row" style="margin-top:10px"><button id="bHelp">Controls</button></div>
+  <div class="cred">Aircraft models converted from the FlightGear project (GNU GPL). See CREDITS.</div>
+</div>
+
+<div id="menu" class="panel hide">
+  <div class="row"><b style="font-size:22px;letter-spacing:.06em;flex:3">MISSION SETUP</b><button id="bBack" style="flex:1">Back</button></div>
+  <h2>Username</h2>
+  <input id="sName" type="text" maxlength="16" placeholder="Your callsign name" autocomplete="off">
+  <h2>Team</h2>
+  <div class="row"><button id="tBlue" class="team on">Blue</button><button id="tRed" class="team">Red</button></div>
+  <h2>Aircraft</h2>
+  <select id="sType"></select>
+  <div id="sDesc"></div>
+  <h2>Livery</h2>
+  <select id="sLiv"></select>
+  <h2>Start at</h2>
+  <select id="sBase"></select>
+
+  <div class="sect">
+    <h2>Multiplayer</h2>
+    <div id="mpNote" class="dim hide">Multiplayer needs the game server. Open the game from its Render address to play online.</div>
+    <input id="sCode" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off">
+    <div class="row" style="margin-top:8px"><button id="bJoin" class="mp">Join multiplayer</button><button id="bCreate" class="mp">Create room</button></div>
+    <label class="dim" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input id="sPub" type="checkbox" checked style="width:auto"> List my room publicly (uncheck for a private, code-only room)</label>
+    <div id="mpErr" class="err"></div>
+    <div id="roomList"></div>
+  </div>
+
+  <div class="sect">
+    <h2>Play against AI <span class="dim">(also used as the settings for rooms you create)</span></h2>
+    <label class="dim">AI fighters per team: <b id="vAI">8</b></label>
+    <input id="sAI" type="range" min="0" max="16" value="8">
+    <div class="row" style="margin-top:6px"><select id="sDiff"></select><select id="sMode"></select></div>
+    <div class="row" style="margin-top:6px"><select id="sWx"></select><select id="sTod"></select></div>
+    <h2>Map</h2>
+    <select id="sMap"></select>
+    <button id="bAI" class="big go" style="margin-top:12px">Play against AI</button>
+  </div>
+</div>
+
+<div id="help" class="panel hide">
+  <b>CONTROLS</b>
+  <table>
+    <tr><td>Mouse</td><td>Steer (on the ground: nosewheel; pull back to rotate)</td></tr>
+    <tr><td>W / S</td><td>Throttle up / down (S at idle = brakes)</td></tr>
+    <tr><td>A / D, arrows</td><td>Rudder / turn, pitch</td></tr>
+    <tr><td>Left click / Space</td><td>Cannon (Space = brakes on the ground)</td></tr>
+    <tr><td>F / right click</td><td>Missile (needs lock)</td></tr>
+    <tr><td>T</td><td>Cycle target</td></tr>
+    <tr><td>X / Z</td><td>Flares (IR missiles) / Chaff (radar missiles)</td></tr>
+    <tr><td>B / N</td><td>Bomb / Nuke</td></tr>
+    <tr><td>G</td><td>Landing gear</td></tr>
+    <tr><td>Q / E</td><td>Flaps up / down</td></tr>
+    <tr><td>R</td><td>Reverse thrust (on the ground)</td></tr>
+    <tr><td>H</td><td>Request approach</td></tr>
+    <tr><td>P</td><td>Rearm &amp; repair (stopped at home base)</td></tr>
+    <tr><td>C, 1–8</td><td>Camera views · mouse wheel zooms</td></tr>
+    <tr><td>V</td><td>Look down at the controls</td></tr>
+    <tr><td>Tab</td><td>Scoreboard · Enter: chat (multiplayer)</td></tr>
+    <tr><td>M / Esc</td><td>Mute / Pause</td></tr>
+  </table>
+</div>
+
+<div id="arm" class="panel hide">
+  <b style="font-size:20px">REARM &amp; REPAIR</b>
+  <div id="rM"><label>Missiles <span id="vM"></span></label><input id="aM" type="range" min="0" max="8" value="8"></div>
+  <div id="rC"><label>Cannon rounds <span id="vC"></span></label><input id="aC" type="range" min="0" max="800" step="50" value="400"></div>
+  <label>Flares <span id="vF"></span></label><input id="aF" type="range" min="0" max="24" value="24">
+  <label>Chaff <span id="vZ"></span></label><input id="aZ" type="range" min="0" max="24" value="24">
+  <div id="rB"><label>Bombs <span id="vB"></span></label><input id="aB" type="range" min="0" max="8" value="4"></div>
+  <div class="dim" style="margin-top:8px">Heavier loads make the aircraft less agile.</div>
+  <div class="row" style="margin-top:14px"><button id="aGo" class="go">Load &amp; repair</button><button id="aX">Cancel</button></div>
+</div>
+
+<div id="spawnP" class="panel hide">
+  <b style="font-size:20px">NEXT AIRCRAFT</b>
+  <h2>Aircraft</h2><select id="rType"></select>
+  <h2>Start at</h2><select id="rBase"></select>
+  <div class="row" style="margin-top:14px"><button id="rGo" class="go">Spawn</button><button id="spMenu">Leave</button></div>
+</div>
+
+<div id="res" class="panel hide">
+  <div id="ttl">VICTORY</div><div id="sub" class="dim"></div><div id="stats" style="margin:12px 0 18px;font-weight:700"></div>
+  <div class="row"><button id="restart" class="go">Next round</button><button id="again2" class="go">Play again</button><button id="again">Main menu</button></div>
+</div>
+
+<div id="pause" class="panel hide">
+  <b style="font-size:22px">PAUSED</b>
+  <div class="row" style="margin-top:14px"><button id="pResume" class="go">Resume</button><button id="pQuit">Quit to menu</button></div>
+</div>
+
+<div id="codeBox" class="panel hide"><span>ROOM <span id="codeTxt"></span></span><button id="bCopy">Copy</button></div>
+<div id="chatBox" class="panel hide"><input id="chatIn" type="text" maxlength="120" placeholder="Message your room — Enter to send" autocomplete="off"></div>
+
+<script src="vendor/three/three.min.js"></script>
+<script src="vendor/three-ex/loaders/GLTFLoader.js"></script>
+<script src="vendor/three-ex/objects/Sky.js"></script>
+<script src="vendor/three-ex/utils/BufferGeometryUtils.js"></script>
+<script src="vendor/colyseus/colyseus.js"></script>
+<script src="shared/sim.js"></script>
+<script src="models/list.js"></script>
+<script src="js/core.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/liveries.js"></script>
+<script src="js/aircraft.js"></script>
+<script src="js/cockpit.js"></script>
+<script src="js/world.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/showroom.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
