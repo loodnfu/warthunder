@@ -31,14 +31,15 @@ Open http://localhost:2567, press **PLAY**, enter a username, then either **PLAY
    git remote add origin https://github.com/<you>/coral-front.git
    git push -u origin main
    ```
-2. **Create the service.** In the Render dashboard choose **New → Blueprint**, connect your GitHub account, and pick the repository. Render reads `render.yaml` and creates a Node web service called `coral-front`. Press **Apply**.
-
-   Prefer to set it up by hand? Choose **New → Web Service**, pick the repo, and use:
-   - Runtime: **Node**
+2. **Create the web service.** In the Render dashboard click **New → Web Service**, connect GitHub, pick the repo, and fill in:
+   - Language / Runtime: **Node**
+   - Branch: `main`
    - Build command: `npm ci --omit=dev`
    - Start command: `npm start`
-   - Health check path: `/health`
-   - Environment variable: `NODE_VERSION` = `22`
+   - Instance type: **Free** (or a paid one to keep rooms always on)
+   - Under **Advanced**: Health check path `/health`, and add the environment variable `NODE_VERSION` = `22`
+
+   Click **Deploy Web Service**. (If your account has Blueprints, **New → Blueprint** does the same thing from `render.yaml`.)
 3. **Wait for the first deploy** (2–3 minutes). The service shows *Live* when `/health` answers.
 4. **Play.** Open `https://coral-front-xxxx.onrender.com` (the address Render shows). Share that address and a room code with friends.
 
@@ -65,13 +66,14 @@ HTTP endpoints: `GET /health`, `GET /api/rooms` (public rooms), `GET /api/rooms/
 | Mouse | Steer (nosewheel on the ground; pull back to rotate) |
 | W / S | Throttle (S at idle = brakes) |
 | Left click / Space | Cannon (Space = brakes on the ground) |
-| F / right click | Missile (after lock) · T cycles targets |
+| F | Missile (after lock) · T cycles targets |
+| Right mouse (hold) | Free look (cam 2 outside, or in the cockpit) · A / D look left / right in the cockpit |
 | X / Z | Flares / chaff |
 | B / N | Bomb / nuke |
 | G, Q / E, R | Gear, flaps, reverse thrust |
 | H | Request approach |
 | P | Rearm and repair when stopped at your home base |
-| C, 1–8 | Cameras (cockpit, chase, wide, fly-by, bomb cam, rear, tower, orbit) |
+| 1–8, C | Cam 1 cockpit, 2 outside free cam, 3 wide, 4 fly-by, 5 bomb cam, 6 rear, 7 tower, 8 orbit |
 | Tab / Enter | Scoreboard / chat |
 
 ## Project layout

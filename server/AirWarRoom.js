@@ -52,7 +52,7 @@ class AirWarRoom extends Room{
       if(m&&m.kind)this.world.emit('crash',Object.assign({},m,{id:p.id}));this.world.kill(p,by,m&&m.how==='ditch'?'ditch':'crash');});
     this.onMessage('rearm',(c,m)=>{const p=this.planeOf(c);if(!p||!p.alive||!p.ground)return;const hb=this.world.homeBase(p);
       if(p.pad!==hb.i||p.spd>3)return c.send('notice',{text:'Rearm only at '+hb.name+', stopped',col:'#ffd23f'});
-      this.world.applyLoad(p,m||{});p.hp=p.hpMax;p.gearDmg=0;p.rearmed=true;c.send('rearmed',{msl:p.msl,ammo:p.ammo,bombs:p.bombs,flares:p.flares,chaff:p.chaff});});
+      this.world.applyLoad(p,m||{});p.hp=p.hpMax;p.gearDmg=0;this.world.repair(p);p.rearmed=true;c.send('rearmed',{msl:p.msl,ammo:p.ammo,bombs:p.bombs,flares:p.flares,chaff:p.chaff});});
     this.onMessage('spawn',(c,m)=>this.doSpawn(c,m||{}));
     this.onMessage('team',(c,m)=>{const pl=this.state.players.get(c.sessionId),p=this.planeOf(c);if(!pl||!p||p.alive)return;
       const t=m===1?1:0;if(t===pl.team)return;if(this.state.balance&&this.teamCount(t)>=this.teamCount(pl.team))return c.send('notice',{text:'Teams are balanced — '+S.TEAM[t].name+' is full',col:'#ffd23f'});

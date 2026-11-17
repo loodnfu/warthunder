@@ -84,6 +84,9 @@ const TYPES={
   j20:{name:'J-20',full:'Chengdu J-20 Mighty Dragon',cls:0,af:'cn',max:255,agil:1.02,hp:115,mass:34,msl:6,mslName:'PL-15',len:20.4,r:1.1,flat:1.4,delta:1,wing:[2.4,-6.6,-5.6,-6.8,6.5],canard:1,fins:2,finH:2.8,cant:.45,eng:2,intake:'side',gold:1,col:0x5b6470,stick:'side',hud:[.4,.32],mfd:1},
   j10c:{name:'J-10C',full:'Chengdu J-10C',cls:0,af:'cn',max:240,agil:1.08,hp:100,mass:14,msl:6,mslName:'PL-15',len:16.9,r:.85,delta:1,wing:[1,-6.4,-5.2,-6.6,4.7],canard:1,fins:1,finH:3.6,eng:1,intake:'chin',col:0x8b95a0,stick:'centre',hud:[.38,.3],mfd:3}
 };
+// 3D models (FlightGear, GPL) for types that share or have their own airframe
+Object.assign(TYPES.gripen,{model:'gripen'});Object.assign(TYPES.su57,{model:'su57'});Object.assign(TYPES.su30,{model:'su37'});
+Object.assign(TYPES.u2,{model:'u2'});Object.assign(TYPES.hawk,{model:'hawk'});Object.assign(TYPES.hawk127,{model:'hawk'});Object.assign(TYPES.kc46,{model:'b767'});
 for(const k in TYPES){
   const t=TYPES[k];t.id=k;t.msl=t.msl||0;t.bombs=t.bombs||0;
   t.gun=t.gun!==undefined?t.gun:(t.cls===0||k==='ac130')?1:0;
@@ -114,18 +117,20 @@ const DIFF={easy:{skill:[.25,.5],agil:.72,aim:2,msl:.5,flare:.4},normal:{skill:[
 const KIND={F:{name:'Fighter base',short:'FTR'},S:{name:'Support base',short:'SUP'},B:{name:'Bomber base',short:'BMR'}};
 const BASE_NAMES=[{F:'Kestrel Field',S:'Wedgetail Field',B:'Lancer Field'},{F:'Viper Field',S:'Mainstay Field',B:'Blackjack Field'}];
 const RWYS=[{name:'36',dx:0,dz:1},{name:'18',dx:0,dz:-1},{name:'09',dx:-1,dz:0},{name:'27',dx:1,dz:0}];
-const STANDS=[];for(let i=0;i<15;i++)STANDS.push(-520+i*74);
+// 14 stands on the apron, 7 each side of the cross runway, which keeps a clear gap through the middle of the apron
+const STANDS=[];for(let k=0;k<7;k++)STANDS.push(-(130+74*k),130+74*k);STANDS.sort((a,b)=>a-b);
 // base furniture in base-local coordinates (lx is mirrored by base side s, so + points away from the runway)
 function baseLayout(kind){
   const B=[],add=(type,lx,lz,w,d,h,extra)=>B.push(Object.assign({type,lx,lz,w,d,h},extra||{}));
-  if(kind==='F'){for(let i=0;i<8;i++)add('shelter',590,-560+i*100+(i>3?100:0),46,40,15);}
-  else for(let i=0;i<3;i++)add('hangar',600,-480+i*190,120,150,34);
-  add('tower',520,140,22,22,48);
-  add('fire',520,-110,46,30,11);
+  // nothing may stand in the cross runway's strip (|lz|<100) or on taxiways Bravo/Charlie (|lz| 172-208 out to lx 690)
+  if(kind==='F'){for(const q of[[590,-560],[590,-460],[590,-360],[590,-260],[590,260],[590,360],[590,460],[680,-560]])add('shelter',q[0],q[1],46,40,15);}
+  else for(const lz of[-480,-290,330])add('hangar',600,lz,120,150,34);
+  add('tower',790,150,22,22,48);
+  add('fire',520,-130,46,30,11);
   add('terminal',640,520,170,60,16);
-  add('maint',720,-330,70,50,14);add('maint',720,-230,60,40,11);
+  add('maint',720,-330,70,50,14);add('maint',720,-420,60,40,11);
   add('fuel',770,-560,14,14,15);add('fuel',800,-560,14,14,15);add('fuel',770,-520,14,14,15);add('fuel',800,-520,14,14,15);
-  add('ops',720,330,60,40,12);add('carpark',780,420,80,110,0);add('gatehouse',930,10,10,8,4);
+  add('ops',720,330,60,40,12);add('carpark',780,420,80,110,0);add('gatehouse',930,-90,10,8,4);
   return B;
 }
 function rwGeo(b,r){
@@ -252,6 +257,8 @@ class World{
       if(lx>190&&lx<520&&Math.abs(lz)<660)return true;          // apron
       if(Math.abs(lx-210)<18&&Math.abs(lz)<670)return true;      // parallel taxiway A
       if(lx>0&&lx<215&&(Math.abs(lz+650)<18||Math.abs(lz-650)<18||Math.abs(lz+300)<16||Math.abs(lz-300)<16))return true; // connectors
+      if(lx>-700&&lx<215&&Math.abs(Math.abs(lz)-190)<16)return true;   // taxiways Bravo and Charlie beside the cross runway
+      if((Math.abs(lx+650)<16||Math.abs(lx+300)<16)&&Math.abs(lz)<205)return true; // their links onto the cross runway
       if(lx>500&&lx<880&&(Math.abs(lz-660)<8||Math.abs(lz+660)<8))return true; // service roads
       if(Math.abs(lx-860)<8&&Math.abs(lz)<670)return true;
     }
@@ -298,7 +305,13 @@ class World{
     return alt||want;
   }
   baseClosed(b){return b.closed.ns&&b.closed.ew;}
-  stallOf(p){return p.minSpd*(1-.28*p.flapT);}
+  stallOf(p){return p.minSpd*(1-.28*p.flapT)*(1+.18*((p.dm?p.dm[0]+p.dm[1]:0)));}
+  // nose attitude on the wheels: rotate up for take-off, lower gently after touchdown
+  groundPitch(p,dt,target){
+    const up=target>p.pitch,rate=up?(p.cls?.09:.16):(p.spd<25?.3:p.cls?.05:.065);
+    p.pitch+=clamp(target-p.pitch,-rate*dt,rate*dt);if(p.pitch<0)p.pitch=0;
+  }
+  pivotLift(p){const t=TYPES[p.type];return Math.sin(p.pitch)*(t.len||15)*.05;}   // the aircraft pivots on its main wheels, just behind the centre
   wind(){const w=this.weather,a=w.windDir*D2R,v=w.windKt*.514+w.gust;return{x:Math.sin(a)*-v,z:Math.cos(a)*-v,v};} // blowing FROM windDir
 
   /* ---- planes ---- */
@@ -309,7 +322,7 @@ class World{
       x:0,y:0,z:0,yaw:0,pitch:0,roll:0,spd:0,thr:0,vy:0,hpMax:t.hp,hp:t.hp,maxSpd:t.max,minSpd:t.minSpd,
       agil:t.agil*(o.human?1.05:t.cls?1:rnd(.86,1)*this.diff.agil),rad:t.cls?Math.max(14,t.len*.5):14,mass:t.mass,
       alive:false,falling:false,ground:false,gear:true,gearT:1,flap:.5,flapT:.5,gearH:(t.r+1.95)*(t.cls?1.3:1.7),vs:0,g:1,
-      comp:0,gearDmg:0,sliding:false,collapsed:false,spinR:0,parts:0,brake:false,rev:false,fire:false,aimX:0,aimY:0,aimZ:0,
+      comp:0,gearDmg:0,sliding:false,collapsed:false,spinR:0,parts:0,dm:[0,0,0,0,0,0],burn:false,cond:1,brake:false,rev:false,fire:false,aimX:0,aimY:0,aimZ:0,
       pad:-1,base:0,rwy:0,lrw:-1,gs:null,wps:[],wi:0,next:'',blockT:0,noCost:false,airT:0,rearmed:false,stand:-1,
       ammo:400,bombs:t.bombs,msl:t.msl,mslMax:t.msl,mslCd:0,flares:4,chaff:4,flareCd:0,flareT:0,chaffT:0,cool:0,reload:0,
       yawS:0,pitchS:0,kills:0,deaths:0,gunKills:0,respawn:0,spin:1,lastHitBy:null,hitT:-99,lock:0,lockT:0,
@@ -326,19 +339,30 @@ class World{
   }
   holdFor(b,r,fromZ){
     const g=rwGeo(b,r),X=b.x+b.s*210;
-    if(g.ns)return{x:b.x+b.s*110,z:g.T.z,via:[[X,g.T.z]]};
-    return{x:X,z:b.z+(fromZ>b.z?75:-75),via:[]};
+    if(g.ns)return{x:b.x+b.s*110,z:g.T.z,via:[[X,g.T.z]],tw:'Alpha'};
+    const side=fromZ>=b.z?1:-1,tl=(g.T.x-b.x)*b.s;
+    if(tl>0)return{x:X,z:b.z+side*75,via:[],tw:'Alpha',back:true};      // threshold on the apron side: hold at the Alpha crossing, backtrack
+    return{x:b.x+b.s*tl,z:b.z+side*110,via:[[X,b.z+side*190],[b.x+b.s*tl,b.z+side*190]],tw:'Alpha, '+(side>0?'Bravo':'Charlie')};
+  }
+  toAlpha(p,b){ // waypoints that follow the taxiways from wherever the aircraft is back to taxiway Alpha
+    const lx=(p.x-b.x)*b.s,lz=p.z-b.z,W=(x,z)=>[b.x+b.s*x,b.z+z],sd=lz>=0?1:-1;
+    if(Math.abs(lx-210)<25||lx>190)return[];
+    for(const c of[-650,-300])if(Math.abs(lx-c)<25&&Math.abs(lz)<205)return[W(c,sd*190),W(210,sd*190)];
+    if(Math.abs(Math.abs(lz)-190)<25)return[W(210,sd*190)];
+    for(const c of[-650,-300,300,650])if(Math.abs(lz-c)<25)return[W(210,c)];
+    if(Math.abs(lz)<70)return[W(210,0)];                       // on the cross runway: Alpha crosses it
+    return[];
   }
   routeToHold(p,b,fromApron){
-    const H=this.holdFor(b,b.act,p.z),X=b.x+b.s*210,w=[];
+    const H=this.holdFor(b,b.act,p.z),X=b.x+b.s*210,w=this.toAlpha(p,b);
     if(fromApron)w.push([b.x+b.s*330,p.z]);
-    const tz=H.via.length?H.via[0][1]:H.z;
-    w.push([X,p.z+Math.sign(tz-p.z)*Math.min(50,Math.abs(tz-p.z))]);
+    const tz=H.via.length?H.via[0][1]:H.z,pz=w.length?w[w.length-1][1]:p.z;
+    w.push([X,pz+Math.sign(tz-pz)*Math.min(50,Math.abs(tz-pz))]);
     for(const v of H.via)w.push(v);
     w.push([H.x,H.z]);return w;
   }
   lineupPath(b,r){
-    const g=rwGeo(b,r),X=b.x+b.s*210,w=g.ns?[]:[[X,b.z]];
+    const g=rwGeo(b,r),X=b.x+b.s*210,w=g.ns||(g.T.x-b.x)*b.s<0?[]:[[X,b.z]];
     w.push([g.T.x,g.T.z],[g.T.x+g.dx*60,g.T.z+g.dz*60]);return w;
   }
   freeStand(b){
@@ -348,8 +372,14 @@ class World{
   exitRoute(p,b){
     const g=rwGeo(b,p.rwy),X=b.x+b.s*210,w=[];p.stand=this.freeStand(b);const sz=b.z+STANDS[p.stand];
     if(g.ns){const ez=b.z+[-650,-300,300,650].reduce((a,v)=>Math.abs(b.z+v-(p.z+g.dz*80))<Math.abs(a-(p.z+g.dz*80))?b.z+v:a,1e9)-b.z;
-      w.push([b.x+b.s*60,ez+b.z-b.z],[X,ez+(sz>ez?40:-40)]);}
-    else w.push([X,b.z],[X,b.z+(sz>b.z?60:-60)]);
+      w.push([b.x+b.s*60,ez],[X,ez]);}
+    else{ // cross runway: turn off at the next link to Bravo/Charlie (or Alpha), then taxi to the apron
+      const side=sz>b.z?1:-1,plx=(p.x-b.x)*b.s,dir=Math.sign(g.dx*b.s)||1;
+      const ahead=[-650,-300,210].filter(c=>(c-plx)*dir>-15).sort((a,c)=>Math.abs(a-plx)-Math.abs(c-plx));
+      const c=ahead.length?ahead[0]:210;
+      if(c===210)w.push([X,b.z],[X,b.z+side*60]);
+      else w.push([b.x+b.s*c,b.z],[b.x+b.s*c,b.z+side*190],[X,b.z+side*190]);
+    }
     w.push([X,sz],[b.x+b.s*300,sz]);return w;
   }
   standPos(b,i){return{x:b.x+b.s*300,z:b.z+STANDS[i]};}
@@ -357,10 +387,10 @@ class World{
     o=o||{};
     let b=o.base!==undefined&&o.base>=0?this.bases[o.base]:this.homeBase(p);if(b.hp<=0)b=this.homeBase(p);
     const t=TYPES[p.type];
-    Object.assign(p,{spd:0,thr:0,pitch:0,roll:0,yawS:0,pitchS:0,hp:p.hpMax,alive:true,falling:false,ammo:t.gun?400:0,reload:0,cool:0,
+    Object.assign(p,{spd:0,thr:0,pitch:0,roll:0,yawS:0,pitchS:0,hp:p.hpMax,dm:[0,0,0,0,0,0],burn:false,cond:1,alive:true,falling:false,ammo:t.gun?400:0,reload:0,cool:0,
       msl:p.mslMax,bombs:t.bombs,mslCd:0,flares:p.human?24:p.cls?8:4,chaff:p.human?24:p.cls?8:4,flareCd:0,flareT:0,chaffT:0,lastHitBy:null,lrw:-1,
       ground:true,gear:true,gearT:1,flap:.5,flapT:.5,pad:b.i,base:b.i,blockT:0,noCost:false,comp:0,gearDmg:0,sliding:false,collapsed:false,
-      parts:0,spinR:0,vy:0,lock:0,lockT:0,stand:-1,atc:'park',atcT:0,wantLand:false,rearmed:false,fire:false,brake:false,rev:false});
+      parts:0,dm:[0,0,0,0,0,0],burn:false,cond:1,dmWarn:0,spinR:0,vy:0,lock:0,lockT:0,stand:-1,atc:'park',atcT:0,wantLand:false,rearmed:false,fire:false,brake:false,rev:false});
     p.y=PAD_Y+p.gearH;
     const ai=p.ai;Object.assign(ai,{mode:'fight',air:0,climb:0,tgt:null,evade:0,lockT:0,phase:0,holdT:0});
     if(o.air){
@@ -416,13 +446,68 @@ class World{
   }
 
   /* ---- damage, kills, scores ---- */
+  // blast or crash damage with no exact impact point: spread over the airframe
   damage(p,amt,by,how){
     if(!p.alive||!this.auth)return;
-    p.hp-=p.human?amt*.6:amt;p.lastHitBy=by;p.hitT=this.time;
-    this.emit('hit',{id:p.id,by:by?by.id:0,amt});
-    if(how==='msl'&&p.hp<p.hpMax*.35&&!(p.parts&3)&&Math.random()<.45){p.parts|=Math.random()<.5?1:2;this.emit('breakup',{id:p.id,part:p.parts&1?'wingL':'wingR'});}
-    if(p.hp<=0)this.kill(p,by,how||'gun');
+    const tough=Math.sqrt(p.hpMax/100),n=amt>60?3:2;
+    for(let i=0;i<n;i++)this.hitZone(p,Math.floor(Math.random()*5),amt/100/tough*(i?.45:.8),by,how);
   }
+  /* ---- zone damage: no health bar, the airframe takes hits where the rounds land ----
+     zones: 0 left wing, 1 right wing, 2 tail (elevator/rudder), 3 engine, 4 fuel tank, 5 cockpit */
+  visScale(t){return t.cls?1.3:t.model?1.7:1.3;}
+  toLocal(p,x,y,z){ // world → aircraft frame (x left wing, y up, z nose), same rotation as the drawn model
+    let dx=x-p.x,dy=y-p.y,dz=z-p.z,c=Math.cos(-p.yaw),s=Math.sin(-p.yaw);
+    let x1=dx*c+dz*s,z1=-dx*s+dz*c;c=Math.cos(p.pitch);s=Math.sin(p.pitch);
+    const y2=dy*c-z1*s,z2=dy*s+z1*c;c=Math.cos(-p.roll);s=Math.sin(-p.roll);
+    return{x:x1*c-y2*s,y:x1*s+y2*c,z:z2};
+  }
+  // which part of the aircraft a point (aircraft frame) is in, or -1 for a miss
+  zoneAt(p,l){
+    const t=TYPES[p.type],k=1.35,V=this.visScale(t),L=(t.len||15)*V,S=(t.heli?t.rotorR*.35:(t.span?t.span/2:(t.wing?t.wing[4]:L*.35)))*V,R=Math.max(.6,(t.r||1)*V*1.5);
+    const ax=Math.abs(l.x),fus=l.x*l.x+l.y*l.y<R*R*k*k&&Math.abs(l.z)<L*.53,wing=!t.heli&&ax<S*k&&Math.abs(l.y)<Math.max(1,R*.55)*k&&l.z>-L*.32&&l.z<L*.2,
+      tail=l.z<-L*.27&&l.z>-L*.56&&ax<Math.max(S*.45,R*2.5)*k&&l.y>-R&&l.y<R*3.6*k;
+    if(!fus&&!wing&&!tail)return -1;
+    if(tail&&!wing)return 2;
+    if(wing&&ax>R*.9){
+      if(t.cls&&!t.heli&&ax>S*.2&&ax<S*.7&&Math.random()<.32)return 3;   // wing-mounted engines
+      if(ax<S*.4&&Math.random()<.25)return 4;                          // wing-root tanks
+      return l.x>0?0:1;
+    }
+    if(l.z>L*(t.cls?.38:.18)&&(t.cls||l.y>-R*.2||l.z>L*.42))return 5;
+    if(!t.cls&&l.z<-L*.12)return 3;
+    if(t.cls&&l.z<-L*.15)return 2;
+    return 4;
+  }
+  hitZone(p,z,amt,by,how){
+    if(!p.alive||!this.auth||z<0)return;
+    const dm=p.dm;if(p.human)amt*=.75;
+    const was=dm[z];dm[z]=Math.min(1,dm[z]+amt);p.lastHitBy=by;p.hitT=this.time;
+    if(how!=='fire')this.emit('hit',{id:p.id,by:by?by.id:0,z});
+    const kh=how==='fire'?(by?'gun':'crash'):how||'gun';
+    if((z===4&&dm[4]>.3&&Math.random()<(how==='msl'?.6:.18))||(z===3&&dm[3]>.65&&Math.random()<.15))if(!p.burn){p.burn=true;this.dmgNote(p,'FIRE! — GET IT ON THE GROUND','#ff5a4d');}
+    const NM=['LEFT WING','RIGHT WING','TAIL','ENGINE','FUEL TANK','COCKPIT'];
+    if(was<.35&&dm[z]>=.35&&dm[z]<1)this.dmgNote(p,NM[z]+(z===4?' HIT — LEAKING FUEL':' DAMAGED'),'#ffd23f');
+    else if(was<.7&&dm[z]>=.7&&dm[z]<1)this.dmgNote(p,NM[z]+' CRITICAL','#ff8a3d');
+    this.condOf(p);
+    if(dm[z]<1||was>=1)return;
+    if(z<=1){p.parts|=z?2:1;this.emit('breakup',{id:p.id,part:z?'wingR':'wingL'});this.kill(p,by,kh);}
+    else if(z===2){this.emit('breakup',{id:p.id,part:'tail'});this.dmgNote(p,'ELEVATOR SHOT AWAY — USE THROTTLE AND TRIM','#ff5a4d');}
+    else if(z===3){this.dmgNote(p,'ENGINE FAILURE — GLIDE TO A RUNWAY','#ff5a4d');if(Math.random()<.5)p.burn=true;}
+    else if(z===4){this.emit('boom',{x:p.x,y:p.y,z:p.z,s:p.cls?1:0});this.kill(p,by,kh);}
+    else if(z===5){this.dmgNote(p,'PILOT HIT','#ff5a4d');this.kill(p,by,kh);}
+  }
+  missileHit(p,m){
+    const t=TYPES[p.type],V=this.visScale(t),l=this.toLocal(p,m.x,m.y,m.z),L=(t.len||15)*V,sc=Math.max(Math.abs(l.x),Math.abs(l.y),Math.abs(l.z),1);
+    // pull the warhead position onto the airframe to find what it shredded
+    const f=Math.min(1,L*.3/sc),q={x:l.x*f,y:l.y*f*.3,z:l.z*f};let z=this.zoneAt(p,q);if(z<0)z=Math.abs(q.x)>L*.15?(q.x>0?0:1):q.z<-L*.25?2:4;
+    const tough=Math.sqrt(p.hpMax/100),big=m.pl?1.25:1;
+    this.hitZone(p,z,(.62+Math.random()*.3)*big/tough,m.owner,'msl');
+    const nb=z<=1?[4,3]:z===2?[3,z===2?0:1]:[z===3?2:3,Math.random()<.5?0:1];
+    if(p.alive)this.hitZone(p,nb[Math.random()<.5?0:1],(.25+Math.random()*.25)*big/tough,m.owner,'msl');
+  }
+  dmgNote(p,text,col){if(p.human)this.emit('notice',{to:p.id,text,col});}
+  condOf(p){const d=p.dm;p.cond=1-Math.max(d[0],d[1],d[2]*.8,d[3]*.8,d[4],d[5]);return p.cond;}
+  repair(p){p.dm=[0,0,0,0,0,0];p.burn=false;p.cond=1;p.parts=0;}
   kill(p,by,how,opts){ // gun | msl | nuke | crash | ditch
     if(!p.alive||!this.auth)return;
     opts=opts||{};
@@ -543,7 +628,7 @@ class World{
     if(!this.auth)return m.life>0;
     for(const p of this.planes){
       if(!p.alive||p.team===m.team||p===m.safe)continue;
-      if(Math.hypot(p.x-m.x,p.y-m.y,p.z-m.z)<p.rad+(m.pl?28:12)){this.emit('boom',{x:m.x,y:m.y,z:m.z,s:0});this.damage(p,m.pl?90:70,m.owner,'msl');return false;}
+      if(Math.hypot(p.x-m.x,p.y-m.y,p.z-m.z)<p.rad+(m.pl?28:12)){this.emit('boom',{x:m.x,y:m.y,z:m.z,s:0});this.missileHit(p,m);return false;}
     }
     if(m.life<=0||m.y<this.ground(m.x,m.z)){this.emit('boom',{x:m.x,y:Math.max(m.y,1),z:m.z,s:0});return false;}
     return true;
@@ -592,11 +677,12 @@ class World{
       const e=(p.x-g.T.x)*g.px+(p.z-g.T.z)*g.pz;p.x-=g.px*e*Math.min(1,dt*2);p.z-=g.pz*e*Math.min(1,dt*2);
       p.spd=Math.min(p.spd+(p.cls?11:17)*dt,p.maxSpd*.75);
       if(b.rw===p&&(p.x-g.T.x)*g.dx+(p.z-g.T.z)*g.dz>270)b.rw=null;
-      if(TYPES[p.type].heli?p.spd>15:p.spd>this.stallOf(p)+12){p.ground=false;p.gs=null;p.pitch=.14;p.y+=.6;p.gear=false;p.ai.mode='fight';p.ai.air=0;p.ai.climb=7;p.airT=this.time;if(b.rw===p)b.rw=null;p.stand=-1;}
+      const vr=this.stallOf(p)+12;if(!TYPES[p.type].heli){this.groundPitch(p,dt,p.spd>vr*.9?(p.cls?.13:.16):0);p.y=this.ground(p.x,p.z)+p.gearH+this.pivotLift(p);}
+      if(TYPES[p.type].heli?p.spd>15:p.spd>vr&&p.pitch>.08){p.ground=false;p.gs=null;p.gam=0;p.gear=true;p.ai.mode='fight';p.ai.air=0;p.ai.climb=7;p.airT=this.time;if(b.rw===p)b.rw=null;p.stand=-1;}
     }else if(p.gs==='rollout'){
       const g=rwGeo(b,p.rwy);
       p.thr=0;p.rev=!!TYPES[p.type].rev&&p.spd>25;p.brake=true;
-      p.spd=Math.max(0,p.spd-(p.rev?14:11)*dt);p.yaw+=angDiff(g.yaw,p.yaw)*Math.min(1,dt*2);
+      p.spd=Math.max(0,p.spd-(p.rev?14:11)*dt);p.yaw+=angDiff(g.yaw,p.yaw)*Math.min(1,dt*2);this.groundPitch(p,dt,0);p.y=this.ground(p.x,p.z)+p.gearH+this.pivotLift(p);
       if(p.spd<13){p.gs='taxi';p.next='stand';p.wi=0;p.flap=0;p.rev=false;p.wps=this.exitRoute(p,b);this.atc(p,'GROUND','taxi to stand '+(p.stand+1)+' via Alpha','stand '+(p.stand+1)+' via Alpha');}
     }else{
       const w=p.wps[p.wi];
@@ -606,7 +692,9 @@ class World{
         else if(p.next==='parked'){if(this.time-p.atcT>20){p.alive=false;p.falling=false;p.ground=false;p.gs=null;p.respawn=6;p.noCost=true;p.stand=-1;this.emit('park',{id:p.id});}}
         else if(p.next==='hold'){
           if(p.atc!=='hold'){p.atc='hold';this.atc(p,'TOWER',this.rwBusy(b,p)?'hold short runway '+rwGeo(b,b.act).name+', traffic':'','',p.cs+' ready for departure runway '+rwGeo(b,b.act).name);}
-          if(!this.rwBusy(b,p)){b.rw=p;b.t=this.time;p.rwy=b.act;p.wps=this.lineupPath(b,p.rwy);p.wi=0;p.next='roll';this.atc(p,'TOWER','runway '+rwGeo(b,p.rwy).name+', line up and wait','line up and wait runway '+rwGeo(b,p.rwy).name);}
+          const Hh=this.holdFor(b,b.act,p.z);
+          if(Math.hypot(p.x-Hh.x,p.z-Hh.z)>40){p.wps=this.routeToHold(p,b,false);p.wi=0;p.atc='taxi';}   // runway changed while waiting: taxi to the new holding point
+          else if(!this.rwBusy(b,p)){b.rw=p;b.t=this.time;p.rwy=b.act;p.wps=this.lineupPath(b,p.rwy);p.wi=0;p.next='roll';this.atc(p,'TOWER','runway '+rwGeo(b,p.rwy).name+', line up and wait','line up and wait runway '+rwGeo(b,p.rwy).name);}
         }else if(p.next==='roll'){p.gs='roll';p.flap=.5;this.atc(p,'TOWER',this.windStr()+', runway '+rwGeo(b,p.rwy).name+', cleared for takeoff','cleared for takeoff runway '+rwGeo(b,p.rwy).name);}
       }else{
         const dx=w[0]-p.x,dz=w[1]-p.z,d=Math.hypot(dx,dz),df=angDiff(Math.atan2(dx,dz),p.yaw);
@@ -624,7 +712,7 @@ class World{
       }
     }
     if(b.rw===p&&(p.next==='stand'||p.next==='parked')&&!this.rwAxis(b,p.x,p.z))b.rw=null;
-    p.x+=Math.sin(p.yaw)*p.spd*dt;p.z+=Math.cos(p.yaw)*p.spd*dt;p.pitch=0;p.roll=0;p.y=this.ground(p.x,p.z)+p.gearH;
+    p.x+=Math.sin(p.yaw)*p.spd*dt;p.z+=Math.cos(p.yaw)*p.spd*dt;if(p.gs!=='roll'&&p.gs!=='rollout')p.pitch=0;p.roll=0;p.y=this.ground(p.x,p.z)+p.gearH+this.pivotLift(p);
   }
   aiLand(p,dt){
     const ai=p.ai,b=this.homeBase(p),c={yaw:0,pitch:0,fire:false,thr:.8},F=fwd(p);
@@ -649,7 +737,7 @@ class World{
       c.yaw=clamp(angDiff(Math.atan2(g.dx*500-g.px*e*1.6,g.dz*500-g.pz*e*1.6),p.yaw)*2.5,-1,1);
       c.pitch=clamp((clamp((ty-p.y)/140-GS,-.22,.12)-p.pitch)*4,-1,1);
       c.thr=p.spd<this.stallOf(p)+18?.62:.1;
-      if(-da>770&&p.y>PAD_Y+40){ai.mode='rtb';p.gear=false;p.flap=0;if(b.rw===p)b.rw=null;this.atc(p,'TOWER','go around, climb runway heading','going around');}
+      if(-da>770&&p.y>PAD_Y+40){ai.mode='rtb';p.flap=.5;if(b.rw===p)b.rw=null;}   // overshot: quietly line up again (never happens in testing)
       return c;
     }
     c.yaw=clamp(angDiff(Math.atan2(tx-p.x,tz-p.z),p.yaw)*2,-1,1);
@@ -711,10 +799,11 @@ class World{
   }
   aiThink(p,dt){
     const ai=p.ai,D=this.diff;ai.air+=dt;
+    if(p.gear&&!p.wantLand&&this.time-(p.airT||0)<20&&p.y-this.ground(p.x,p.z)>18&&p.vs<-.5)p.gear=false; // positive rate, then gear up
     if(ai.climb>0){ai.climb-=dt;if(ai.climb<=0)p.flap=0;return{yaw:0,pitch:clamp((.2-p.pitch)*3,-1,1),fire:false,thr:1};}
     if(ai.mode!=='fight')return this.aiLand(p,dt);
     if(p.cls)return this.aiBig(p,dt);
-    if((p.msl===0&&ai.air>150)||p.hp<p.hpMax*.35||ai.air>420){ai.mode='rtb';return this.aiLand(p,dt);}
+    if((p.msl===0&&ai.air>150)||p.hp<p.hpMax*.35||p.cond<.5||p.burn||ai.air>420){ai.mode='rtb';return this.aiLand(p,dt);}
     const c={yaw:0,pitch:0,fire:false,thr:1};
     ai.retgt-=dt;ai.mslCd-=dt;
     if(!ai.tgt||!ai.tgt.alive||ai.retgt<=0){ai.tgt=this.pickTarget(p);ai.retgt=rnd(2.5,6);}
@@ -780,6 +869,10 @@ class World{
     p.gearT=clamp(p.gearT+(p.gear&&!p.collapsed?1:-1)*dt/1.6,0,1);
     p.flapT+=clamp(p.flap-p.flapT,-dt*.5,dt*.5);
     p.cool-=dt;p.mslCd-=dt;p.flareCd-=dt;p.flareT-=dt;p.chaffT-=dt;p.comp=Math.max(0,p.comp-dt*2.4);
+    if(p.burn&&this.auth){
+      if(p.ground&&p.spd<6){p.burn=false;this.dmgNote(p,'FIRE OUT — CRASH CREW ON SCENE','#7ddc6f');}
+      else{const tough=Math.sqrt(p.hpMax/100);p.dm[3]=Math.min(1,p.dm[3]+dt*.008/tough);this.hitZone(p,4,dt*.042/tough,p.lastHitBy,'fire');if(!p.alive)return;}
+    }
     if(p.remote)return;                      // kinematics arrive from the owning client
     const t=TYPES[p.type],ai=!p.human;
     if(p.sliding)return this.stepSlide(p,dt);
@@ -791,7 +884,7 @@ class World{
     if(ai)p.thr+=(c.thr-p.thr)*Math.min(1,dt*2);
     p.fire=!!c.fire&&!!t.gun&&p.ammo>0;
     if(!p.human&&p.ai.mode==='final'&&this.padAt(p.x,p.z)===this.homeBase(p).i&&p.y<=this.ground(p.x,p.z)+p.gearH+1.5){
-      const b=this.homeBase(p);p.ground=true;p.gs='rollout';p.pitch=0;p.pitchS=0;p.roll=0;p.y=this.ground(p.x,p.z)+p.gearH;p.pad=b.i;p.base=b.i;p.ai.mode='fight';p.comp=.6;
+      const b=this.homeBase(p);p.ground=true;p.gs='rollout';p.pitch=clamp(p.pitch,0,.2);p.pitchS=0;p.roll=0;p.y=this.ground(p.x,p.z)+p.gearH;p.pad=b.i;p.base=b.i;p.ai.mode='fight';p.comp=.6;
       this.emit('touch',{id:p.id,x:p.x,z:p.z,vs:2});this.atc(p,'TOWER','exit runway when able, contact ground','wilco');return;
     }
     if(t.heli)this.stepHeli(p,c,dt);
@@ -802,18 +895,22 @@ class World{
       if(p.flapT>0&&p.spd>p.minSpd*1.9&&p.flap>0){p.flap=0;if(p.human)this.emit('notice',{text:'FLAPS RETRACTED — TOO FAST',to:p.id});}
       const resp=Math.min(1,dt*4/t.inertia);
       p.yawS+=(yi-p.yawS)*resp;p.pitchS+=(pi-p.pitchS)*Math.min(1,dt*5/t.inertia);
-      let ag=clamp(1.35-p.spd/480,.6,1)*p.agil;if(p.parts&3)ag*=.6;
-      p.yaw+=p.yawS*ag*dt+(p.parts&1?-.25:p.parts&2?.25:0)*dt;
-      p.pitch=clamp(p.pitch+p.pitchS*.9*ag*dt,-1.3,1.3);
-      p.roll+=(-p.yawS*(p.cls?.55:1.2)-p.roll)*Math.min(1,dt*3.5);
+      const dm=p.dm,asym=dm[0]-dm[1],elev=dm[2]>=1?.18:1-dm[2]*.6;
+      let ag=clamp(1.35-p.spd/480,.6,1)*p.agil;if(p.parts&3)ag*=.6;ag*=1-.35*Math.max(dm[0],dm[1]);
+      p.yaw+=p.yawS*ag*dt+(p.parts&1?-.25:p.parts&2?.25:0)*dt-asym*.14*dt;
+      p.pitch=clamp(p.pitch+p.pitchS*.9*ag*elev*dt-(dm[2]>.5?(dm[2]-.5)*.12*dt:0),-1.3,1.3);   // a shot-up tail droops the nose and answers less
+      p.roll+=(-p.yawS*(p.cls?.55:1.2)+asym*.5-p.roll)*Math.min(1,dt*3.5);   // a damaged wing drops
       p.g=Math.min(9,1+(Math.hypot(Math.cos(p.pitch)+p.pitchS*.9*ag*p.spd/G,p.yawS*ag*p.spd/G)-1)*.36);
-      const want=(p.minSpd+(p.maxSpd-p.minSpd)*p.thr)*(1-.22*p.gearT-.2*p.flapT);
+      const eng=p.dm[3]>=1?0:1-p.dm[3]*.55,want=(p.minSpd*(eng?1:.55)+(p.maxSpd-p.minSpd)*p.thr*eng)*(1-.22*p.gearT-.2*p.flapT)*(1-.12*(p.dm[0]+p.dm[1]));
       p.spd=clamp(p.spd+(want-p.spd)*dt*.5/Math.sqrt(t.inertia)-Math.sin(p.pitch)*30*dt-Math.abs(p.yawS)*7*dt,50,p.maxSpd*1.25);
       const F=fwd(p),W=this.wind();
-      p.x+=(F.x*p.spd+W.x)*dt;p.y+=F.y*p.spd*dt;p.z+=(F.z*p.spd+W.z)*dt;
+      const agl=p.y-this.ground(p.x,p.z)-p.gearH,tau=(p.cls?.9:.45)*Math.max(clamp(1-agl/90,0,1),clamp(1-(this.time-(p.airT||0))/5,0,1));
+      if(p.gam===undefined)p.gam=p.pitch;p.gam+=(p.pitch-p.gam)*(tau>0?Math.min(1,dt/tau):1);   // flight path follows the nose with a little lag near the ground
+      const vy=Math.sin(p.gam)*p.spd;
+      p.x+=(F.x*p.spd+W.x)*dt;p.y+=vy*dt;p.z+=(F.z*p.spd+W.z)*dt;
       if(this.weather.storm>.5&&!p.ground){const k=this.weather.storm*dt;p.pitch+=rnd(-.08,.08)*k;p.yaw+=rnd(-.05,.05)*k;p.y+=rnd(-3,3)*k;}
-      const sink=p.human?clamp((stall+10-p.spd)*.35,0,15):0;   // below approach speed the wing stops holding you up
-      p.y-=sink*dt;p.vs=sink-F.y*p.spd;
+      const sink=p.human||p.dm[3]>=1?clamp((stall+10-p.spd)*.35,0,15):0;   // below approach speed the wing stops holding you up
+      p.y-=sink*dt;p.vs=sink-vy;
     }
     if(this.contact(p,dt))return;
     // guns
@@ -872,7 +969,7 @@ class World{
       if(p.gearDmg>=1){p.collapsed=true;p.gear=false;this.startSlide(p,'gear');return true;}
       if(p.hp<=0){this.reportCrash(p,by,'crash');return true;}
       if(p.vs>lim*1.15&&!t.heli){p.pitch=.07;p.pitchS=.3;p.y=gh+p.gearH+.5+p.vs*.08;p.spd*=.96;return true;}  // bounce
-      p.ground=true;p.pad=this.padAt(p.x,p.z);p.pitch=0;p.pitchS=0;p.roll=0;p.y=gh+p.gearH;p.vy=0;if(p.pad>=0)p.base=p.pad;
+      p.ground=true;p.pad=this.padAt(p.x,p.z);p.pitch=clamp(p.pitch,0,.25);p.pitchS=0;p.roll=0;p.y=gh+p.gearH+this.pivotLift(p);p.vy=0;if(p.pad>=0)p.base=p.pad;
       this.atcTouchdown(p);
       return true;
     }
@@ -934,14 +1031,15 @@ class World{
     const grip=surf==='asphalt'?1:.75;
     p.yaw+=p.yawS*clamp(p.spd/8,0,1)*(1-clamp((p.spd-30)/90,0,.75))*.7*grip*dt;
     p.pitchS+=((c.pitch||0)-p.pitchS)*Math.min(1,dt*5);
-    p.pitch=0;p.roll=0;
+    const vr=this.stallOf(p)+10;
+    this.groundPitch(p,dt,(c.pitch||0)>.15&&p.spd>vr*.88?Math.min(p.cls?.17:.24,.06+(c.pitch||0)*.2):0);
+    p.roll=0;
     p.x+=Math.sin(p.yaw)*p.spd*dt;p.z+=Math.cos(p.yaw)*p.spd*dt;
     const g=this.ground(p.x,p.z);
     if(g>p.y-p.gearH+3&&p.spd>5){this.emit('crash',{id:p.id,kind:'explode',x:p.x,y:g,z:p.z,yaw:p.yaw,spd:p.spd,type:p.type});this.reportCrash(p,null,'crash');return;}
-    p.y=g+p.gearH*(1-p.comp*.12);p.pad=this.padAt(p.x,p.z);
+    p.y=g+p.gearH*(1-p.comp*.12)+this.pivotLift(p);p.pad=this.padAt(p.x,p.z);
     if(MAPS[this.map].sea&&this.surface(p.x,p.z)==='water'){this.reportCrash(p,null,'ditch');return;}
-    const vr=this.stallOf(p)+10;
-    if(p.spd>vr&&(c.pitch||0)>.15){p.ground=false;p.rearmed=false;p.pitch=.1;p.y+=.6;p.airT=this.time;p.stand=-1;this.atcAirborne(p);}
+    if(p.spd>vr&&p.pitch>.07){p.ground=false;p.rearmed=false;p.gam=0;p.airT=this.time;p.stand=-1;this.atcAirborne(p);}
     this.atcUpdate(p);
   }
 
@@ -972,7 +1070,7 @@ class World{
         case'park':case'field':
           if(b.team!==p.team){say('GROUND','you are on an enemy airfield','', 'wrong');break;}
           if(b!==hb&&p.spd<2){say('GROUND','this is '+b.name+'. Your aircraft belongs at '+hb.name+'. No rearm here. Taxi to holding point runway '+g.name+' when ready','taxi holding point '+g.name,'taxi');break;}
-          if(since>1.5)say('GROUND',b.name+' ground, taxi to holding point runway '+g.name+' via Alpha, contact tower when ready','holding point '+g.name+' via Alpha','taxi');
+          if(since>1.5)say('GROUND',b.name+' ground, taxi to holding point runway '+g.name+' via '+H.tw+(H.back?', backtrack on the runway when cleared':'')+', contact tower when ready','holding point '+g.name+' via '+H.tw,'taxi');
           break;
         case'taxi':
           if(ax===g.axis)p.atc='onrw';
@@ -1027,20 +1125,20 @@ class World{
     switch(p.atc){
       case'app':
         if(da>0&&da<6500&&Math.abs(e)<1600&&since>4){
-          if(hb.rw===p||!this.rwBusy(hb,p)){hb.rw=p;hb.t=now;say('TOWER',this.windStr()+', runway '+g.name+', cleared to land','cleared to land '+g.name,'final');}
-          else say('TOWER','continue approach, runway occupied, number two','continue','cont');
+          // a pilot on approach always gets the runway: the tower holds the AI traffic instead of sending you around
+          hb.rw=p;hb.t=now;say('TOWER',this.windStr()+', runway '+g.name+', cleared to land','cleared to land '+g.name,'final');
         }
         break;
       case'cont':
-        if(hb.rw===p||!this.rwBusy(hb,p)){hb.rw=p;hb.t=now;say('TOWER','runway '+g.name+', cleared to land','cleared to land '+g.name,'final');}
-        else if(da<1800){say('TOWER','go around, runway occupied. Climb runway heading to 2000 feet','going around','goaround');}
+        hb.rw=p;hb.t=now;say('TOWER','runway '+g.name+', cleared to land','cleared to land '+g.name,'final');
         break;
       case'final':{
         hb.rw=p;hb.t=now;
         const gy=this.ground(g.A.x,g.A.z)+p.gearH+Math.max(0,da)*GS;
-        const unstable=da<1300&&da>150&&(Math.abs(e)>140||p.y-gy>110||p.spd>this.stallOf(p)*1.6*1.25||p.gearT<.95);
-        if(unstable&&since>3)say('TOWER',p.gearT<.95?'go around, check gear down':'go around, unstable approach','going around','goaround');
-        else if(da<-900)say('TOWER','go around','going around','goaround');
+        // advice only — never a go-around: you are cleared, land it however you can
+        const tip=da<2500&&da>150?(p.gearT<.95&&!(p.dm&&p.burn)?'gear':p.y-gy>140?'high':Math.abs(e)>160?'line':p.spd>this.stallOf(p)*2.1?'fast':''):'';
+        if(tip&&tip!==p.atcTip&&since>3){p.atcTip=tip;this.atc(p,'TOWER',{gear:'check gear down',high:'you are high on the glidepath, increase descent',line:'correct to the centreline',fast:'speed high, reduce power'}[tip],'');}
+        if(da<-900&&!p.ground&&p.y>this.ground(p.x,p.z)+60){p.atc='app';p.atcTip='';}   // flew past it: the tower just lines you up again
         break;}
       case'goaround':
         if(hb.rw===p)hb.rw=null;
@@ -1130,7 +1228,9 @@ class World{
           if(p.team===b.team||!p.alive)continue;
           const px=p.x-b.x,py=p.y-b.y,pz=p.z-b.z;if(px*px+py*py+pz*pz>4e4)continue;
           const u=clamp((px*sx+py*sy+pz*sz)/sl,0,1),dx=px-sx*u,dy=py-sy*u,dz=pz-sz*u;
-          if(dx*dx+dy*dy+dz*dz<p.rad*p.rad){gone=true;this.emit('spark',{x:b.x+sx*u,y:b.y+sy*u,z:b.z+sz*u});this.damage(p,10,b.owner,'gun');break;}
+          if(dx*dx+dy*dy+dz*dz<p.rad*p.rad){const hx=b.x+sx*u,hy=b.y+sy*u,hz=b.z+sz*u,z=this.zoneAt(p,this.toLocal(p,hx,hy,hz));if(z<0)continue;
+            gone=true;const il=1/Math.sqrt(sl);this.emit('hole',{id:p.id,x:r1(hx),y:r1(hy),z:r1(hz),dx:r2(sx*il),dy:r2(sy*il),dz:r2(sz*il)});
+            this.hitZone(p,z,[.085,.085,.11,.1,.08,.2][z]/Math.sqrt(p.hpMax/100),b.owner,'gun');break;}
         }
         b.x+=sx;b.y+=sy;b.z+=sz;
         if(b.y<16){const pd=this.padAt(b.x,b.z);if(pd>=0&&this.bases[pd].team!==b.team&&b.owner.human&&b.y<this.ground(b.x,b.z)+2){this.hitBase(pd,.25);gone=true;}if(b.y<0)gone=true;}
@@ -1172,8 +1272,8 @@ class World{
   snapshot(){
     const P=[];
     for(const p of this.planes){
-      const f=(p.alive?1:0)|(p.falling?2:0)|(p.ground?4:0)|(p.gear?8:0)|(p.sliding?16:0)|(p.collapsed?32:0)|(p.fire?64:0)|(p.brake?128:0)|(p.rev?256:0)|(p.flareT>0?512:0)|(p.chaffT>0?1024:0);
-      P.push([p.id,r1(p.x),r1(p.y),r1(p.z),r3(p.yaw),r3(p.pitch),r3(p.roll),r1(p.spd),r2(p.thr),f,r2(p.gearT),r2(p.flapT),Math.max(0,Math.round(p.hp)),p.lock||0,r2(p.comp),p.parts,p.pad,Math.round(p.respawn),p.msl,p.ammo,p.bombs,p.flares,p.chaff,p.kills,p.deaths]);
+      const f=(p.alive?1:0)|(p.falling?2:0)|(p.ground?4:0)|(p.gear?8:0)|(p.sliding?16:0)|(p.collapsed?32:0)|(p.fire?64:0)|(p.brake?128:0)|(p.rev?256:0)|(p.flareT>0?512:0)|(p.chaffT>0?1024:0)|(p.burn?2048:0);
+      P.push([p.id,r1(p.x),r1(p.y),r1(p.z),r3(p.yaw),r3(p.pitch),r3(p.roll),r1(p.spd),r2(p.thr),f,r2(p.gearT),r2(p.flapT),Math.max(0,Math.round(p.hp)),p.lock||0,r2(p.comp),p.parts,p.pad,Math.round(p.respawn),p.msl,p.ammo,p.bombs,p.flares,p.chaff,p.kills,p.deaths,p.dm.map(v=>Math.round(v*100))]);
     }
     const M=this.missiles.map(m=>[m.id,r1(m.x),r1(m.y),r1(m.z),r3(m.dx),r3(m.dy),r3(m.dz),m.team,m.kind==='ir'?1:0,m.tgt?m.tgt.id:0]);
     const B=this.bombs.map(b=>[b.id,r1(b.x),r1(b.y),r1(b.z),r1(b.vx),r1(b.vy),r1(b.vz),b.nuke?1:0]);
