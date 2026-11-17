@@ -23,7 +23,7 @@ const NET={
     r.onMessage('dmg',d=>{if(world){world.applyDamageState(d);syncDamage();}});
     r.onMessage('spawned',m=>onSpawned(m));
     r.onMessage('resume',m=>onSpawned(m,true));
-    r.onMessage('rearmed',m=>{if(player){Object.assign(player,m);player.hp=player.hpMax;player.gearDmg=0;player.rearmed=true;notice('REARMED AND REFUELLED','#7ddc6f');}});
+    r.onMessage('rearmed',m=>{if(player){Object.assign(player,m);player.hp=player.hpMax;player.gearDmg=0;world.repair(player);player.rearmed=true;notice('REARMED, REFUELLED AND REPAIRED','#7ddc6f');}});
     r.onMessage('nukes',n=>{nukesHeld=n;notice('☢ NUKE EARNED','#ffd23f');});
     r.onMessage('notice',m=>notice(m.text,m.col));
     r.onMessage('chat',m=>{chatLog.unshift({cs:m.cs,team:m.team,text:m.text,t:12});if(chatLog.length>6)chatLog.pop();});
@@ -69,6 +69,7 @@ const NET={
       const o=A.get(id)||q,L=(i)=>o[i]+(q[i]-o[i])*k,LA=(i)=>o[i]+angDiff(q[i],o[i])*k,f=q[9];
       if(p===player){ // our own aircraft: the server owns health, weapons and death
         p.hp=q[12];p.kills=q[23];p.deaths=q[24];p.lock=q[13];p.msl=q[18];p.ammo=q[19];p.bombs=q[20];p.flares=q[21];p.chaff=q[22];
+        if(q[25]){p.dm=q[25].map(v=>v/100);p.burn=!!(f&2048);p.parts=q[15];world.condOf(p);}
         if(!(f&1)&&p.alive){p.alive=false;p.falling=!!(f&2);p.respawn=q[17];deaths++;}
         if(!p.alive){p.respawn=q[17];if(f&2){p.x=L(1);p.y=L(2);p.z=L(3);p.yaw=LA(4);p.pitch=LA(5);p.roll=LA(6);p.falling=true;}else p.falling=false;}
         continue;
@@ -78,6 +79,7 @@ const NET={
       p.flareT=f&512?1:0;p.chaffT=f&1024?1:0;
       p.gearT=L(10);p.flapT=L(11);p.hp=q[12];p.lock=q[13];p.comp=q[14];p.parts=q[15];p.pad=q[16];p.respawn=q[17];
       p.msl=q[18];p.ammo=q[19];p.bombs=q[20];p.flares=q[21];p.chaff=q[22];p.kills=q[23];p.deaths=q[24];
+      if(q[25]){p.dm=q[25].map(v=>v/100);p.burn=!!(f&2048);world.condOf(p);}
     }
     for(const p of world.planes.slice())if(p!==player&&!seen.has(p.id))world.removePlane(p);
     // missiles and bombs: extrapolate from the latest snapshot

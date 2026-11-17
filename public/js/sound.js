@@ -58,7 +58,7 @@ Object.assign(snd,{
       this.rainL.g.gain.setTargetAtTime(m*rain*(inside?.12:.06),t,.5);
       // low rumble scaled by engine type: jets roar, props drone, rotors thump
       const e=eng||{thr:0,kind:'jet',on:false};
-      this.jetL.g.gain.setTargetAtTime(m*(e.on?(e.kind==='rotor'?.08+.06*Math.abs(Math.sin(t*14)):e.kind==='prop'?.06:.05+e.thr*.09):0),t,.08);
+      this.jetL.g.gain.setTargetAtTime(m*(e.on?(e.kind==='rotor'?.08+.06*Math.abs(Math.sin(t*14)):e.kind==='prop'?.06:.05+e.thr*.09+(e.ab&&e.thr>.85?.1:0)):0),t,.08);
       this.jetL.f.frequency.setTargetAtTime(e.kind==='prop'?90+e.thr*60:e.kind==='rotor'?70:140+e.thr*220,t,.2);
       this.engF.Q.value=e.kind==='prop'?3:.6;
     }catch(err){}

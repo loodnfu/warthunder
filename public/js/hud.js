@@ -110,6 +110,23 @@ function approachGuide(pl,hb,g){ // green boxes down the glidepath, ILS needles 
   const lp=proj(g.A.x+g.px*85,PAD_Y+2,g.A.z+g.pz*85);
   if(lp.on&&da>200)for(let i=0;i<4;i++){ctx.fillStyle=ang>th[i]?'#fff':'#ff3b30';circle(lp.x+(i-1.5)*clamp(9000/Math.max(da,400),3,14),lp.y,clamp(5000/Math.max(da,400),2,6));}
 }
+// top-down damage diagram: each part shows how badly it has been shot up
+function drawDamage(p,cx,cy,sc){
+  const dm=p.dm||[0,0,0,0,0,0],fl=Math.sin(time*10)>0;
+  const col=v=>v<=0?'rgba(47,214,90,.75)':v<.35?'#c8e05a':v<.7?'#ffb02e':v<1?'#ff5a4d':(fl?'#ff5a4d':'rgba(60,60,60,.6)');
+  ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);ctx.lineJoin='round';
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.beginPath();ctx.arc(0,4,62,0,TAU);ctx.fill();
+  const poly=(pts,c)=>{ctx.fillStyle=c;ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();ctx.fill();ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=1;ctx.stroke();};
+  poly([[-7,-6],[-52,14],[-52,22],[-7,14]],col(dm[0]));         // left wing
+  poly([[7,-6],[52,14],[52,22],[7,14]],col(dm[1]));              // right wing
+  poly([[-6,30],[-22,44],[-22,49],[22,49],[22,44],[6,30]],col(dm[2]));   // tail
+  poly([[-7,-34],[7,-34],[7,30],[-7,30]],'rgba(120,135,145,.55)'); // fuselage
+  poly([[-6,-8],[6,-8],[6,12],[-6,12]],col(dm[4]));               // fuel tank
+  poly([[-6,14],[6,14],[6,32],[-6,32]],col(dm[3]));               // engine
+  poly([[-5,-48],[5,-48],[7,-34],[7,-22],[-7,-22],[-7,-34]],col(dm[5]));  // cockpit
+  ctx.restore();
+  txt(p.burn?'🔥 FIRE — LAND NOW':dm[3]>=1?'ENGINE OUT':dm[2]>=1?'NO ELEVATOR':dm[4]>.35?'FUEL LEAK':Math.max(...dm)>0?'DAMAGED':'AIRFRAME OK',cx+(cx<200?-50*sc:0),cy-64*sc,p.burn||dm[3]>=1||dm[2]>=1?'#ff5a4d':Math.max(...dm)>0?'#ffd23f':'#7ddc6f',cx<200?'left':'center',13,800);
+}
 function drawHUD(){
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
   const pl=player&&player.alive&&state==='play'?player:null;
@@ -119,17 +136,18 @@ function drawHUD(){
     if(!p.alive||p===player)continue;
     const enemy=player?p.team!==player.team:false;
     if(enemy&&!canSee(p))continue;
-    const T=TEAM[p.team],s=proj(p.x,p.y,p.z);
+    const T=TEAM[p.team],s=proj(p.x,p.y,p.z),human=p.human&&!!player,mate=human&&!enemy,col=mate?'#ffd23f':enemy&&player?'#ff5a4d':T.col;
     const d=pl?Math.hypot(p.x-pl.x,p.y-pl.y,p.z-pl.z):0;
     if(s.on){
       const b=pl?clamp((p.cls?26000:10000)/Math.max(d,1),9,p.cls?70:36):12;
-      ctx.strokeStyle=T.col;
-      if(enemy||!player){ctx.strokeRect(s.x-b,s.y-b,b*2,b*2);}
+      ctx.strokeStyle=col;
+      if(enemy||!player){ctx.strokeRect(s.x-b,s.y-b,b*2,b*2);if(human){ctx.lineWidth=2.5;ctx.strokeRect(s.x-b-4,s.y-b-4,b*2+8,b*2+8);ctx.lineWidth=1.5;}}
+      else if(mate){ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(s.x,s.y,b+4,0,TAU);ctx.stroke();ctx.lineWidth=1.5;}
       else{ctx.beginPath();ctx.moveTo(s.x-7,s.y-b-2);ctx.lineTo(s.x,s.y-b-9);ctx.lineTo(s.x+7,s.y-b-2);ctx.stroke();}
-      if(!pl||enemy||p.cls||d<3000)txt(p.cs+(pl&&enemy?'  '+nm(d):''),s.x,s.y-b-12,T.col,'center',12);
+      if(!pl||enemy||p.cls||d<3000||human)txt((human?'▲ PLAYER · ':'')+p.cs+(pl&&(enemy||human)?'  '+nm(d):''),s.x,s.y-b-12-(human?4:0),col,'center',human?13:12);
       if(pl&&enemy){
         ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(s.x-b,s.y+b+4,b*2,3);
-        ctx.fillStyle=T.col;ctx.fillRect(s.x-b,s.y+b+4,b*2*clamp(p.hp/p.hpMax,0,1),3);
+        ctx.fillStyle=col;ctx.fillRect(s.x-b,s.y+b+4,b*2*clamp(p.cond===undefined?1:p.cond,0,1),3);if(p.burn)txt('🔥',s.x+b+8,s.y+b+6,'#ff8a3d','left',12);
         if(d<1100&&!pl.ground){
           const lt=d/BSPD;fwd(p,G);fwd(pl,F);
           const l=proj(p.x+(G.x*p.spd-F.x*pl.spd)*lt,p.y+(G.y*p.spd-F.y*pl.spd)*lt,p.z+(G.z*p.spd-F.z*pl.spd)*lt);
@@ -205,7 +223,7 @@ function drawHUD(){
     txt('SINK '+Math.round(Math.max(0,vs)*197/50)*50+' fpm',sx,H/2-6,vc,'center',14,800);
     if(pl.y-ground(pl.x,pl.z)<45)txt(vs<5?'SMOOTH':vs<10?'HARD':'CRASH',sx,H/2+12,vc,'center',12);
   }
-  if(player&&state==='play'&&(player.falling||(player.alive&&player.hp<player.hpMax*.4))){
+  if(player&&state==='play'&&(player.falling||(player.alive&&(player.hp<player.hpMax*.4||player.burn||(player.cond!==undefined&&player.cond<.3))))){
     const gr=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.7);
     gr.addColorStop(0,'rgba(200,0,0,0)');gr.addColorStop(1,'rgba(200,0,0,'+(.32+.12*Math.sin(time*6))+')');
     ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
@@ -256,7 +274,8 @@ function drawHUD(){
     if(p===player){
       ctx.save();ctx.translate(q[0],q[1]);ctx.rotate(Math.atan2(-Math.cos(p.yaw),-Math.sin(p.yaw)));ctx.fillStyle='#ffd23f';
       ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();ctx.restore();
-    }else{ctx.fillStyle=TEAM[p.team].col;if(p.cls)ctx.fillRect(q[0]-3.5,q[1]-3.5,7,7);else circle(q[0],q[1],2.6);}
+    }else{const en=player&&p.team!==player.team,c=p.human&&player?(en?'#ff5a4d':'#ffd23f'):TEAM[p.team].col;ctx.fillStyle=c;if(p.cls)ctx.fillRect(q[0]-3.5,q[1]-3.5,7,7);else circle(q[0],q[1],p.human?3.4:2.6);
+      if(p.human&&player){ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q[0],q[1],6,0,TAU);ctx.stroke();}}
   }
   }
   if(!player)return;
@@ -279,9 +298,7 @@ function drawHUD(){
     txt((p.ammo>0?'CANNON '+p.ammo:'CANNON EMPTY — LAND')+'   BOMBS ×'+p.bombs+' [B]',px,by-44,p.ammo>0?'#eef3f5':'#ffd23f','right',15);
   }
   txt('KILLS '+p.kills+'   DEATHS '+deaths,px,by-24,'#eef3f5','right',14);
-  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px-190,by-14,190,12);
-  const hf=clamp(p.hp/p.hpMax,0,1);
-  ctx.fillStyle=hf>.55?'#7ddc6f':hf>.28?'#ffd23f':'#ff5a4d';ctx.fillRect(px-190,by-14,190*hf,12);
+  drawDamage(p,74,by-215,.85);
   }
   if(state!=='play')return;
   let my2=H*.3;

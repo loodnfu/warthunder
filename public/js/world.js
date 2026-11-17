@@ -204,7 +204,7 @@ function buildAirfield(w,b){
   // taxiways, apron and roads
   {const [x,z]=L(210,0);plane(32,1340,asph,x,z,.08);}
   for(const lz of[-650,-300,300,650]){const [x,z]=L(135,lz);plane(150,lz%650?28:34,asph,x,z,.085);}
-  {const [x,z]=L(355,0);plane(330,1320,conc,x,z,.07);}
+  for(const sd of[-1,1]){const [x,z]=L(355,sd*380);plane(330,560,conc,x,z,.07);}          // apron, split by the cross runway's clear strip
   for(const lz of[-660,660]){const [x,z]=L(690,lz);plane(380,14,asph,x,z,.06);}
   {const [x,z]=L(860,0);plane(14,1334,asph,x,z,.06);}
   {const [x,z]=L(780,420);plane(80,110,asph,x,z,.065);}
@@ -215,6 +215,11 @@ function buildAirfield(w,b){
     if(i<2)plane(alongZ?30:.35,alongZ?.35:30,yel,x,z,.12);else for(let k=-12;k<=12;k+=4){const [dx,dz]=L(lx+(alongZ?k:off),lz+(alongZ?off:k));plane(alongZ?2:.35,alongZ?.35:2,yel,dx,dz,.12);}}};
   for(const lz of[-650,-300,300,650])holdBar(92,lz,false);
   holdBar(210,-75,true);holdBar(210,75,true);
+  // taxiways Bravo (north) and Charlie (south) alongside the cross runway, with links onto it
+  for(const sd of[-1,1]){
+    {const [x,z]=L(-242,sd*190);plane(916,32,asph,x,z,.08);plane(916,.5,yel,x,z,.1);for(const e of[-15.5,15.5]){const [ex,ez]=L(-242,sd*190+e);plane(890,.35,yel,ex,ez,.1);}}
+    for(const c of[-650,-300]){const [x,z]=L(c,sd*125);plane(32,140,asph,x,z,.085);plane(.5,125,yel,x,z,.11);holdBar(c,sd*110,true);}
+  }
   // parking stands with lead-in lines and numbers
   STANDS.forEach((sz,i)=>{
     const [x,z]=L(300,sz);plane(.4,1,yel,x,z,.11);
@@ -229,7 +234,9 @@ function buildAirfield(w,b){
   for(let m=-690;m<=690;m+=15){if(Math.abs(m)>62){ctr.add(b.x,Y+.25,b.z+m);ctr.add(b.x+m,Y+.25,b.z);}}
   for(let k=-56;k<=56;k+=7){thr.add(b.x+k,Y+.5,b.z-694);thr.add(b.x+k,Y+.5,b.z+694);thr.add(b.x-694,Y+.5,b.z+k);thr.add(b.x+694,Y+.5,b.z+k);}
   for(let k=-56;k<=56;k+=14){endL.add(b.x+k,Y+.5,b.z-700.5);endL.add(b.x+k,Y+.5,b.z+700.5);endL.add(b.x-700.5,Y+.5,b.z+k);endL.add(b.x+700.5,Y+.5,b.z+k);}
-  for(let lz=-660;lz<=660;lz+=40){taxi.add(b.x+s*194,Y+.4,b.z+lz);taxi.add(b.x+s*226,Y+.4,b.z+lz);}
+  for(let lz=-660;lz<=660;lz+=40){if(Math.abs(lz)<75)continue;taxi.add(b.x+s*194,Y+.4,b.z+lz);taxi.add(b.x+s*226,Y+.4,b.z+lz);}
+  for(const sd of[-1,1]){for(let lx=-680;lx<=190;lx+=40){if(Math.abs(lx)<75)continue;for(const e of[-16,16])taxi.add(b.x+s*lx,Y+.4,b.z+sd*190+e);}
+    for(const c of[-650,-300])for(let lz=75;lz<=175;lz+=25)for(const e of[-16,16])taxi.add(b.x+s*(c+e),Y+.4,b.z+sd*lz);}
   for(let r=0;r<4;r++){ // approach light system out to 900 m with a crossbar at 300 m
     const g=rwGeo(b,r);
     for(let d=60;d<=900;d+=30){const px=g.T.x-g.dx*(d+50),pz=g.T.z-g.dz*(d+50);if(world.padAt(px,pz)<0&&MAPS[w.map].sea)continue;
@@ -248,7 +255,8 @@ function buildAirfield(w,b){
   const sign=(lx,lz,text,mand)=>{const [x,z]=L(lx,lz),m=new THREE.Mesh(new THREE.PlaneGeometry(6,1.5),new THREE.MeshBasicMaterial({map:signTex(text,mand?'#b81d1d':'#141414',mand?'#ffffff':'#f0c419',mand?'m':'l'),side:THREE.DoubleSide}));m.position.set(x,Y+1.4,z);m.rotation.y=Math.PI/2;root.add(m);
     batch.add(new THREE.BoxGeometry(.15,1.2,.15),std({color:0x333333}),x-1.6*s,Y+.6,z);batch.add(new THREE.BoxGeometry(.15,1.2,.15),std({color:0x333333}),x+1.6*s,Y+.6,z);};
   sign(95,-668,'36-18',true);sign(95,668,'18-36',true);sign(95,-318,'36-18',true);sign(95,318,'18-36',true);
-  sign(232,-90,'09-27',true);sign(232,90,'27-09',true);sign(232,-300,'A',false);sign(232,300,'A',false);sign(232,0,'A  B',false);
+  sign(232,-90,'09-27',true);sign(232,90,'27-09',true);sign(232,-300,'A',false);sign(232,300,'A',false);sign(232,-210,'A  C',false);sign(232,210,'A  B',false);
+  for(const sd of[-1,1])for(const c of[-650,-300])sign(c+24,sd*112,'09-27',true);
   // buildings
   for(const o of b.bld){const v=buildBuilding(o,b,batch);if(v){root.add(v);b.view.bld[o.id]=v;}}
   // perimeter fence with the security gate
@@ -256,7 +264,7 @@ function buildAirfield(w,b){
   for(let i=0;i<120;i++){
     const a0=i/120*TAU,a1=(i+1)/120*TAU,R=985;
     const x0=b.x+Math.cos(a0)*R,z0=b.z+Math.sin(a0)*R,x1=b.x+Math.cos(a1)*R,z1=b.z+Math.sin(a1)*R;
-    const gx=b.x+s*R;if(Math.hypot((x0+x1)/2-gx,(z0+z1)/2-b.z)<30)continue;
+    const gx=b.x+s*R;if(Math.hypot((x0+x1)/2-gx,(z0+z1)/2-(b.z-90))<30)continue;
     const len=Math.hypot(x1-x0,z1-z0),g=new THREE.PlaneGeometry(len,2.6);
     batch.add(g,fenceMat,(x0+x1)/2,Y+1.3,(z0+z1)/2,-Math.atan2(z1-z0,x1-x0));
     batch.add(new THREE.BoxGeometry(.18,2.9,.18),post,x0,Y+1.45,z0);
@@ -343,10 +351,10 @@ function buildGroundOps(w){
     const s=b.s,L=(lx,lz)=>[b.x+s*lx,b.z+lz];
     const put=(kind,lx,lz,ry,extra)=>{const [x,z]=L(lx,lz),m=vehicleMesh(kind);m.position.set(x,PAD_Y,z);m.rotation.y=ry||0;dynRoot.add(m);const v=Object.assign({kind,m,b,home:{x,z,ry:ry||0}},extra||{});vehicles.push(v);return v;};
     STANDS.forEach((sz,i)=>{if(i%3===0)put('stairs',330,sz-14,s>0?-Math.PI/2:Math.PI/2);if(i%4===1){put('crew',335,sz+10);put('crew',326,sz+14);}});
-    put('fire',500,-110,s>0?-Math.PI/2:Math.PI/2,{role:'fire'});put('fire',505,-95,s>0?-Math.PI/2:Math.PI/2,{role:'fire'});
+    put('fire',480,-160,s>0?-Math.PI/2:Math.PI/2,{role:'fire'});put('fire',480,-135,s>0?-Math.PI/2:Math.PI/2,{role:'fire'});
     put('fuel',740,-560,0,{role:'fuelrun',t:Math.random()*60});put('fuel',760,-470,0);
-    put('tug',420,-200,0);put('tug',410,180,Math.PI);put('bag',600,470,0,{role:'bag',t:Math.random()*40});
-    put('repair',740,-330,0,{role:'repair'});put('repair',750,-300,0,{role:'repair2'});
+    put('tug',470,-240,0);put('tug',470,250,Math.PI);put('bag',600,470,0,{role:'bag',t:Math.random()*40});
+    put('repair',800,-290,0,{role:'repair'});put('repair',810,-350,0,{role:'repair2'});
   }
 }
 function driveTo(v,x,z,dt,speed){
@@ -368,9 +376,9 @@ function stepGroundOps(dt){
       if(R){if(driveTo(v,R.x+(v.role==='repair'?-12:10),R.z+(v.role==='repair'?6:-8),dt,14)&&Math.random()<dt*6)part(R.x+rnd(-5,5),PAD_Y+1,R.z+rnd(-5,5),rnd(-2,2),rnd(1,3),rnd(-2,2),1.5,6,3);}
       else driveTo(v,v.home.x,v.home.z,dt,10);
     }else if(v.role==='fuelrun'){ // fuel truck shuttles between the fuel farm and the stands
-      v.t+=dt;const stand=STANDS[Math.floor(v.t/40)%STANDS.length],out=(v.t%40)<20;
+      v.t+=dt;const SS=STANDS.filter(z=>z<0),stand=SS[Math.floor(v.t/40)%SS.length],out=(v.t%40)<20;
       driveTo(v,out?b.x+b.s*318:v.home.x,out?b.z+stand+18:v.home.z,dt,9);
-    }else if(v.role==='bag'){v.t+=dt;driveTo(v,(v.t%40)<20?b.x+b.s*330:v.home.x,(v.t%40)<20?b.z+STANDS[(Math.floor(v.t/40)*5)%STANDS.length]:v.home.z,dt,7);}
+    }else if(v.role==='bag'){v.t+=dt;driveTo(v,(v.t%40)<20?b.x+b.s*330:v.home.x,(v.t%40)<20?b.z+STANDS.filter(z=>z>0)[Math.floor(v.t/40)%7]:v.home.z,dt,7);}
   }
 }
 
@@ -478,6 +486,16 @@ function buildSky(){
   rainPts.userData.drops=Array.from({length:3000},()=>({x:rnd(-80,80),y:rnd(-40,60),z:rnd(-80,80)}));
 }
 const SKYCOL=new THREE.Color(),HZ=new THREE.Color();
+let envTod=-99,pmrem=null,envRT=null;
+function refreshEnv(tod){ // reflections of the current sky for aircraft paint and canopies
+  if(!skyMesh||Math.abs(tod-envTod)<.25)return;envTod=tod;
+  try{
+    pmrem=pmrem||new THREE.PMREMGenerator(renderer);
+    const sc=new THREE.Scene(),sk=new THREE.Mesh(skyMesh.geometry,skyMesh.material);sk.scale.setScalar(80);sc.add(sk);
+    const lo=new THREE.Mesh(new THREE.CircleGeometry(60,24),new THREE.MeshBasicMaterial({color:MAPS[world.map].sea?0x1d4f66:0x4d6a3e}));lo.rotation.x=-Math.PI/2;lo.position.y=-8;sc.add(lo);
+    const rt=pmrem.fromScene(sc,0,.1,200);if(envRT)envRT.dispose();envRT=rt;setAircraftEnv(rt.texture);
+  }catch(e){envTod=tod;}
+}
 function updateSky(dt){
   buildSky();
   const wx=world.weather,M=MAPS[world.map],tod=wx.tod;
@@ -499,7 +517,7 @@ function updateSky(dt){
   sun.color.setHex(0xfff2d8).lerp(new THREE.Color(0xff9a50),dusk*.6);
   hemi.intensity=(.25+.55*day)*(1-wx.storm*.3)+nukeFlash*2.5+flash*1.5;
   hemi.color.setHex(0xe6f2ff).lerp(new THREE.Color(0x3a4a6a),1-day);
-  cockHemi.intensity=.35+.6*day;
+  cockHemi.intensity=.22+.38*day;cockSun.intensity=.15+.35*day;
   if(stars){stars.material.opacity=clamp((darkness-.4)*1.6,0,1)*(1-wx.cloud*.8);stars.position.copy(camera.position);}
   // lights glow at night and in murk
   const glow=clamp(darkness*1.3+wx.fog*.4+wx.rain*.25,.12,1);
@@ -525,4 +543,5 @@ function updateSky(dt){
     P.units.forEach((u,i)=>{u.material.color.setHex(da<0?0x000000:angle>P.th[i]?0xffffff:0xff2a2a);u.scale.setScalar(4+glow*8);});}
   if(gates.length&&player)gates.forEach((g,i)=>g.m&&g.m.material.color.setHex(i===player.gate%gates.length?0xffd23f:0x35d0e0));
   sun.shadow.camera.updateProjectionMatrix();
+  refreshEnv(tod);
 }

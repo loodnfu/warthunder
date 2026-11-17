@@ -99,7 +99,7 @@ const RC=new THREE.Raycaster(),SPOTS={};
 function computeSpots(root){
   root.updateMatrixWorld(true);
   const meshes=[];
-  root.traverse(o=>{if(!o.isMesh)return;let q=o,skip=false;while(q){if(q.name==='gear'||q.name==='glass'||q.userData.leg)skip=true;q=q.parent;}if(!skip){o.material.side=THREE.DoubleSide;meshes.push(o);}});
+  root.traverse(o=>{if(!o.isMesh)return;let q=o,skip=false;while(q){if(q.name==='gear'||q.name==='glass'||q.name==='prop'||q.name==='engines'||q.userData.engine||q.userData.leg||q.userData.prop||q.userData.isDisc||q.userData.propPart)skip=true;q=q.parent;}if(!skip){o.material.side=THREE.DoubleSide;meshes.push(o);}});
   const box=new THREE.Box3();meshes.forEach(m=>box.expandByObject(m));
   const hs=Math.max(-box.min.x,box.max.x),len=box.max.z-box.min.z,spots=[],V=(a,b,c)=>new THREE.Vector3(a,b,c);
   const cast=(o,d)=>{RC.set(o,d);RC.far=1e4;return RC.intersectObjects(meshes,false)[0]||null;};
@@ -132,7 +132,7 @@ function addDecals(g,spots,lv){
   for(const s of spots){
     if(s.kind==='fin'&&lv.fin==='none')continue;
     const m=new THREE.Mesh(DECALGEO,decalMat(lv,s.kind));
-    m.position.copy(s.p).addScaledVector(s.n,.04);m.quaternion.copy(s.q);m.scale.setScalar(s.size);g.add(m);
+    m.position.copy(s.p).addScaledVector(s.n,.04);m.quaternion.copy(s.q);m.scale.setScalar(s.size);m.userData.decal=1;g.add(m);
   }
 }
 
