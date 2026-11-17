@@ -4,7 +4,7 @@
 
 The aircraft models in `public/models/` are simplified conversions of aircraft from the
 [FlightGear](https://www.flightgear.org) flight simulator. They were converted from AC3D to glTF,
-decimated to game-ready triangle counts, and stripped of textures, cockpits, pilots, weapons and
+decimated to game-ready triangle counts (tyres recoloured as rubber, legs as metal), and stripped of textures, cockpits, pilots, weapons and
 lights. The game paints them with its own liveries. Each stays under the GNU General Public
 License version its authors chose. Source: the FlightGear aircraft mirror at https://github.com/FGMEMBERS.
 
@@ -23,7 +23,7 @@ License version its authors chose. Source: the FlightGear aircraft mirror at htt
 | a10 | A-10 Thunderbolt II | GPL v2 | Lee Elliott, Alexis Bory, David Bastien |
 | c5 | C-5 Galaxy | GPL v2 | Jon Bourgeois |
 | c17 | C-17 Globemaster III | GPL v3 | Mathias Froehlich, Algernon |
-| c130 | C-130 / AC-130 (C-130, AC-130J, C-130J) | GPL v2 | Emmanuel Baranger, Didier Fabert, Jettoo, Jack Mermod |
+| c130 | C-130 / AC-130 (C-130, AC-130J, C-130J), with its propellers | GPL v2 | Emmanuel Baranger, Didier Fabert, Jettoo, Jack Mermod |
 | a400 | A400M Atlas | GPL v2 | Anon (3D), StuartC |
 | a330 | A330 (Voyager, KC-30A) | GPL v2 | FlightGear A330 contributors |
 | b707 | Boeing 707 (KC-135, RC-135W) | GPL v2 | Lake of Constance Hangar |
@@ -31,9 +31,19 @@ License version its authors chose. Source: the FlightGear aircraft mirror at htt
 | pc21 | Pilatus PC-21 | GPL v3 | Petar Jedvaj, Ernest Teuscher |
 | su27 | Su-27 (Su-27, Su-30, Su-35) | GPL v2 | Lee Elliott, StuartC, VooDoo |
 | mig29 | MiG-29 (MiG-29, MiG-35) | GPL v2 | FlightGear MiG-29 contributors |
+| gripen | JAS 39 Gripen | GPL v2 | Emmanuel Baranger |
+| su57 | Su-57 (T-50 prototype airframe) | GPL v2 | Petar Jedvaj, Ummon Karpe, StuartC |
+| su37 | Su-37 airframe (used for the Su-30) | GPL v2 | Lee Elliott, StuartC, PipK, VooDoo |
+| u2 | U-2S Dragon Lady (rebootl/U-2S-git) | GPL v2 | Cem Aydin |
+| hawk | BAE Hawk (Hawk T2, Hawk 127) | GPL v2 | Daniel "Intel-Qube" Strawn, StuartC |
+| b2 | B-2 Spirit | GPL (FGMEMBERS, the GPL fork of FGAddon; no licence file in the repo) | Markus Zojer |
+| ch47 | CH-47 Chinook, with its own rotors | GPL (FGMEMBERS; no licence file in the repo) | Melchior Franz, Maik Justus, Syd Adams, AndersG |
+| b767 | Boeing 767-300 (used for the KC-46A) | GPL (FGMEMBERS; no licence file in the repo) | Liam Gathercole, Isaias V. Prestes, Juuso Tapaninen, John Williams, Gabriel Hernandez |
+| m2000 | Mirage 2000-5 | GPL v2 | Emmanuel Baranger, Buckaroo, 5H1N0B1, F-Sig, hardball, Joshua Davidson and others |
 
-The B-2, CH-47, Mirage 2000 and KC-46 repositories had no licence file (or failed conversion), so
-those aircraft, and every aircraft not listed above, use the game's own procedural models.
+Propellers and rotors come from the models themselves (C-130 family, A400M, PC-21, MQ-9, CH-47). No freely licensed
+models were found for the Rafale, MiG-31, Su-34, Su-75, J-20, J-10C, JF-17, KF-21, C-27J, MC-55A, RQ-4 or MQ-4C; those use
+the game's own procedural models (with procedural propellers where the real aircraft has them).
 
 ## Code and libraries
 
